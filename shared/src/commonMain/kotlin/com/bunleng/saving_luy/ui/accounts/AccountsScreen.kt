@@ -41,7 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -359,22 +361,31 @@ private fun AccountDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // Local state keeps typing in sync even when the view model's flow is a frame behind.
+    var name by remember { mutableStateOf(state.name) }
+    var startingBalanceText by remember { mutableStateOf(state.startingBalanceText) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (state.accountId == null) "Add account" else "Edit account") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
-                    value = state.name,
-                    onValueChange = onNameChange,
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        onNameChange(it)
+                    },
                     label = { Text("Name") },
                     singleLine = true,
                 )
                 AccountTypeSelector(selected = state.type, onSelect = onTypeChange)
                 if (state.isNew) {
                     OutlinedTextField(
-                        value = state.startingBalanceText,
-                        onValueChange = onStartingBalanceChange,
+                        value = startingBalanceText,
+                        onValueChange = {
+                            startingBalanceText = it
+                            onStartingBalanceChange(it)
+                        },
                         label = { Text("Starting balance") },
                         placeholder = { Text("0.00") },
                         prefix = { Text("$") },
