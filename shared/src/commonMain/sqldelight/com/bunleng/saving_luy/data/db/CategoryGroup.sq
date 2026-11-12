@@ -1,0 +1,14 @@
+CREATE TABLE categoryGroup (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    sortOrder INTEGER NOT NULL
+);
+
+selectAll:
+SELECT * FROM categoryGroup ORDER BY sortOrder;
+
+count:
+SELECT COUNT(*) FROM categoryGroup;
+
+insert:
+INSERT INTO categoryGroup(id, name, sortOrder) VALUES (?, ?, ?);

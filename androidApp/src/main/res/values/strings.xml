@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">SavingLuy</string>
+    <string name="widget_name">Ready to Assign</string>
+    <string name="widget_description">Ready to Assign and your top categories. Tap to add a transaction.</string>
+</resources>

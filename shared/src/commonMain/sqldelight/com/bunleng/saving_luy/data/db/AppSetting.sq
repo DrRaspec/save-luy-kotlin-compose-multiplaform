@@ -1,0 +1,11 @@
+-- Small key/value store for app preferences (e.g. last used account).
+CREATE TABLE appSetting (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+select:
+SELECT value FROM appSetting WHERE key = ?;
+
+upsert:
+INSERT OR REPLACE INTO appSetting(key, value) VALUES (?, ?);

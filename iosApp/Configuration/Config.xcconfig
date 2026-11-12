@@ -1,0 +1,9 @@
+TEAM_ID=
+
+PRODUCT_NAME=SavingLuy
+PRODUCT_BUNDLE_IDENTIFIER=com.bunleng.saving_luy.SavingLuy$(TEAM_ID)
+
+CURRENT_PROJECT_VERSION=1
+MARKETING_VERSION=1.0
+// Shared is a static framework, so SQLDelight's -lsqlite3 does not propagate to the app.
+OTHER_LDFLAGS = $(inherited) -lsqlite3

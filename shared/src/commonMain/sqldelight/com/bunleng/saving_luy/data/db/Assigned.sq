@@ -1,0 +1,16 @@
+-- month is BudgetMonth.key (yyyymm), amount is in minor units.
+CREATE TABLE assigned (
+    categoryId TEXT NOT NULL REFERENCES category(id),
+    month INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    PRIMARY KEY (categoryId, month)
+);
+
+selectAll:
+SELECT * FROM assigned;
+
+selectAmount:
+SELECT amount FROM assigned WHERE categoryId = ? AND month = ?;
+
+upsert:
+INSERT OR REPLACE INTO assigned(categoryId, month, amount) VALUES (?, ?, ?);

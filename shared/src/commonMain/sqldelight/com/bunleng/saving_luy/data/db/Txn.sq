@@ -1,0 +1,34 @@
+-- amount: minor units, outflow negative. date: epoch day.
+-- categoryId NULL means the money goes to Ready to Assign.
+CREATE TABLE txn (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    accountId INTEGER NOT NULL REFERENCES account(id),
+    categoryId TEXT REFERENCES category(id),
+    payee TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    date INTEGER NOT NULL,
+    memo TEXT NOT NULL
+);
+
+CREATE INDEX txn_account ON txn(accountId);
+
+selectAll:
+SELECT * FROM txn;
+
+selectById:
+SELECT * FROM txn WHERE id = ?;
+
+selectByAccount:
+SELECT * FROM txn WHERE accountId = ? ORDER BY date DESC, id DESC;
+
+insert:
+INSERT INTO txn(accountId, categoryId, payee, amount, date, memo) VALUES (?, ?, ?, ?, ?, ?);
+
+update:
+UPDATE txn SET accountId = ?, categoryId = ?, payee = ?, amount = ?, date = ?, memo = ? WHERE id = ?;
+
+delete:
+DELETE FROM txn WHERE id = ?;
+
+deleteByAccount:
+DELETE FROM txn WHERE accountId = ?;

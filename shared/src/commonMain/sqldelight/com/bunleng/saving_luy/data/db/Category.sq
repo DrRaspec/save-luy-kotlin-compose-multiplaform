@@ -1,0 +1,16 @@
+CREATE TABLE category (
+    id TEXT NOT NULL PRIMARY KEY,
+    groupId TEXT NOT NULL REFERENCES categoryGroup(id),
+    name TEXT NOT NULL,
+    sortOrder INTEGER NOT NULL
+);
+
+-- Budget screen order: by group, then by category within the group.
+selectAll:
+SELECT category.*
+FROM category
+JOIN categoryGroup ON categoryGroup.id = category.groupId
+ORDER BY categoryGroup.sortOrder, category.sortOrder;
+
+insert:
+INSERT INTO category(id, groupId, name, sortOrder) VALUES (?, ?, ?, ?);

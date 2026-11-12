@@ -1,0 +1,28 @@
+import com.bunleng.saving_luy.domain.AccountType;
+import kotlin.Boolean;
+
+CREATE TABLE account (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT AS AccountType NOT NULL,
+    currencyCode TEXT NOT NULL,
+    onBudget INTEGER AS Boolean NOT NULL
+);
+
+selectAll:
+SELECT * FROM account ORDER BY id;
+
+count:
+SELECT COUNT(*) FROM account;
+
+insert:
+INSERT INTO account(name, type, currencyCode, onBudget) VALUES (?, ?, ?, ?);
+
+lastInsertRowId:
+SELECT last_insert_rowid();
+
+update:
+UPDATE account SET name = ?, type = ?, onBudget = ? WHERE id = ?;
+
+delete:
+DELETE FROM account WHERE id = ?;
