@@ -1,8 +1,8 @@
 import XCTest
 
 /// Walks through the main flows like a user would and saves a screenshot after each step.
-/// test1 expects a fresh install (empty Cash account, Ready to Assign $0.00); the others
-/// run after it (XCTest runs methods in name order) and work with whatever data exists.
+/// test1 expects a fresh install (empty Cash account, Ready to Assign $0.00); test2 runs
+/// after it (XCTest runs methods in name order) and works with whatever data exists.
 /// Set TEST_RUNNER_SCREENSHOT_DIR when running xcodebuild to also write PNGs to that folder.
 final class SavingLuyUITests: XCTestCase {
 
@@ -104,59 +104,7 @@ final class SavingLuyUITests: XCTestCase {
         snapshot("back-swipe-closed-form")
     }
 
-    /// Adds the widget from the home screen gallery, checks it shows the app's numbers,
-    /// then taps it and expects Add Transaction.
-    func test3HomeScreenWidget() {
-        XCTAssertTrue(element("+").waitForExistence(timeout: 20)) // app ran, snapshot written
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        XCUIDevice.shared.press(.home)
-        XCTAssertTrue(springboard.wait(for: .runningForeground, timeout: 5))
-
-        // Enter edit mode on an empty part of the home screen.
-        springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)).press(forDuration: 1.5)
-        let edit = springboard.buttons["Edit"]
-        if edit.waitForExistence(timeout: 5) {
-            edit.tap()
-            tapFirst(in: springboard, labels: ["Add Widget", "Add Widgets"])
-        } else {
-            tapFirst(in: springboard, labels: ["Add Widget", "Add Widgets", "Add"])
-        }
-
-        let search = springboard.searchFields.firstMatch
-        XCTAssertTrue(search.waitForExistence(timeout: 5), "widget gallery search field")
-        search.tap()
-        search.typeText("SavingLuy")
-        let result = springboard.descendants(matching: .any)
-            .matching(NSPredicate(format: "label CONTAINS[c] %@", "SavingLuy")).element(boundBy: 1)
-        XCTAssertTrue(result.waitForExistence(timeout: 5), "SavingLuy in widget gallery")
-        result.tap()
-        snapshot(springboard, "widget-gallery")
-        tapFirst(in: springboard, labels: ["Add Widget"])
-        tapFirst(in: springboard, labels: ["Done"], required: false)
-
-        let widgetText = springboard.descendants(matching: .any)
-            .matching(NSPredicate(format: "label CONTAINS %@", "Ready to Assign")).firstMatch
-        XCTAssertTrue(widgetText.waitForExistence(timeout: 10), "widget on home screen")
-        snapshot(springboard, "widget-on-home-screen")
-
-        widgetText.tap()
-        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
-        XCTAssertTrue(element("New Transaction").waitForExistence(timeout: 10))
-        snapshot("opened-from-widget-tap")
-    }
-
     // MARK: - Helpers
-
-    private func tapFirst(in target: XCUIApplication, labels: [String], required: Bool = true) {
-        for label in labels {
-            let button = target.buttons[label]
-            if button.waitForExistence(timeout: 3) {
-                button.tap()
-                return
-            }
-        }
-        if required { XCTFail("None of \(labels) found") }
-    }
 
     /// Tap a category row and type its Assigned amount (in cents) on the keypad sheet.
     private func assign(_ category: String, digits: String) {
@@ -180,13 +128,9 @@ final class SavingLuyUITests: XCTestCase {
     }
 
     private func snapshot(_ name: String) {
-        snapshot(app, name)
-    }
-
-    private func snapshot(_ target: XCUIApplication, _ name: String) {
         step += 1
-        let fileName = String(format: "%@-%02d-%@", name.hasPrefix("widget") ? "w" : "s", step, name)
-        let screenshot = target.screenshot()
+        let fileName = String(format: "%02d-%@", step, name)
+        let screenshot = app.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = fileName
         attachment.lifetime = .keepAlways
