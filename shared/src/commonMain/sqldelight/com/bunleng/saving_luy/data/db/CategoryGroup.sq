@@ -12,3 +12,12 @@ SELECT COUNT(*) FROM categoryGroup;
 
 insert:
 INSERT INTO categoryGroup(id, name, sortOrder) VALUES (?, ?, ?);
+
+nextSortOrder:
+SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM categoryGroup;
+
+rename:
+UPDATE categoryGroup SET name = ? WHERE id = ?;
+
+delete:
+DELETE FROM categoryGroup WHERE id = ?;

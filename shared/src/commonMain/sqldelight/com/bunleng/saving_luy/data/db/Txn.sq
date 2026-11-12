@@ -32,3 +32,9 @@ DELETE FROM txn WHERE id = ?;
 
 deleteByAccount:
 DELETE FROM txn WHERE accountId = ?;
+
+countByCategory:
+SELECT COUNT(*) FROM txn WHERE categoryId = ?;
+
+moveCategory:
+UPDATE txn SET categoryId = ? WHERE categoryId = ?;

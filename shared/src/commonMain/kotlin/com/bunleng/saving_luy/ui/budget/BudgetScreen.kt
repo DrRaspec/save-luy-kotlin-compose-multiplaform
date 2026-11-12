@@ -1,6 +1,8 @@
 package com.bunleng.saving_luy.ui.budget
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -59,6 +61,8 @@ fun BudgetScreen(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
+            BudgetSummary(hint = state.hint, onBudgetBalance = state.onBudgetBalance)
+
             TextButton(
                 onClick = { viewModel.startMoveMoney() },
                 modifier = Modifier.align(Alignment.End).padding(end = 8.dp),
@@ -77,6 +81,9 @@ fun BudgetScreen(
                             name = group.group.name,
                             isExpanded = group.isExpanded,
                             onClick = { viewModel.toggleGroupExpanded(group.group.id) },
+                            onAddCategory = { viewModel.startAddCategory(group.group.id) },
+                            onRename = { viewModel.startRenameGroup(group.group.id) },
+                            onDelete = { viewModel.requestDeleteGroup(group.group.id) },
                         )
                     }
 
@@ -91,14 +98,24 @@ fun BudgetScreen(
                                 assigned = row.entry.assigned,
                                 available = row.entry.available,
                                 onClick = { viewModel.startEditAssigned(row.category.id) },
-                                onLongClick = { viewModel.startMoveMoney(row.category.id) },
+                                onMoveMoney = { viewModel.startMoveMoney(row.category.id) },
+                                onRename = { viewModel.startRenameCategory(row.category.id) },
+                                onDelete = { viewModel.requestDeleteCategory(row.category.id) },
                             )
                             HorizontalDivider(
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                             )
                         }
+                        item(key = "add_cat_${group.group.id}") {
+                            AddRow(label = "Add category", onClick = { viewModel.startAddCategory(group.group.id) })
+                        }
                     }
                 }
+                item(key = "add_group") {
+                    AddRow(label = "Add group", onClick = viewModel::startAddGroup)
+                }
+                // Room so the last rows can scroll above the floating action button.
+                item(key = "fab_space") { Spacer(Modifier.height(88.dp)) }
             }
         }
     }
@@ -112,6 +129,33 @@ fun BudgetScreen(
             onAmountChange = viewModel::onMoveAmountChange,
             onConfirm = { viewModel.confirmMoveMoney() },
             onDismiss = viewModel::cancelMoveMoney,
+        )
+    }
+
+    state.nameDialog?.let { dialog ->
+        NameDialog(
+            state = dialog,
+            onNameChange = viewModel::onNameChange,
+            onConfirm = { viewModel.confirmNameDialog() },
+            onDismiss = viewModel::dismissNameDialog,
+        )
+    }
+
+    state.deleteCategory?.let { delete ->
+        DeleteCategoryDialog(
+            state = delete,
+            otherCategories = state.allCategoryRows.filter { it.category.id != delete.category.id },
+            onSelectMoveTo = viewModel::selectDeleteMoveTo,
+            onConfirm = { viewModel.confirmDeleteCategory() },
+            onDismiss = viewModel::cancelDeleteCategory,
+        )
+    }
+
+    state.deleteGroup?.let { delete ->
+        DeleteGroupDialog(
+            state = delete,
+            onConfirm = { viewModel.confirmDeleteGroup() },
+            onDismiss = viewModel::cancelDeleteGroup,
         )
     }
 

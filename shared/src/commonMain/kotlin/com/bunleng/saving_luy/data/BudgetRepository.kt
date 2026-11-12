@@ -6,6 +6,8 @@ import com.bunleng.saving_luy.domain.BudgetMath
 import com.bunleng.saving_luy.domain.BudgetMonth
 import com.bunleng.saving_luy.domain.CategoryGroup
 import com.bunleng.saving_luy.domain.CategoryMonthAmounts
+import com.bunleng.saving_luy.domain.CategoryRules
+import kotlin.random.Random
 
 /**
  * Categories and Assigned amounts, stored in SQLite via SQLDelight.
@@ -66,11 +68,96 @@ class BudgetRepository(
         changes.notifyChanged()
     }
 
+    /** Cash currently in on-budget accounts. */
+    fun getOnBudgetBalance(): Long =
+        BudgetMath.onBudgetBalance(accountRepository.getTransactions(), onBudgetAccountIds())
+
+    // ---- category and group management ----
+
+    fun addGroup(name: String): String {
+        val id = newId(GROUP_PREFIX) { id -> getGroups().any { it.id == id } }
+        database.categoryGroupQueries.insert(id, name, database.categoryGroupQueries.nextSortOrder().executeAsOne())
+        changes.notifyChanged()
+        return id
+    }
+
+    fun renameGroup(groupId: String, name: String) {
+        database.categoryGroupQueries.rename(name, groupId)
+        changes.notifyChanged()
+    }
+
+    /** Only empty groups can be deleted, so no category or money is lost. @return true if deleted. */
+    fun deleteGroup(groupId: String): Boolean {
+        val deleted = database.transactionWithResult {
+            if (database.categoryQueries.countByGroup(groupId).executeAsOne() > 0) return@transactionWithResult false
+            database.categoryGroupQueries.delete(groupId)
+            true
+        }
+        if (deleted) changes.notifyChanged()
+        return deleted
+    }
+
+    fun addCategory(groupId: String, name: String): String {
+        val id = newId(CATEGORY_PREFIX) { id -> getCategories().any { it.id == id } }
+        database.categoryQueries.insert(id, groupId, name, database.categoryQueries.nextSortOrder(groupId).executeAsOne())
+        changes.notifyChanged()
+        return id
+    }
+
+    fun renameCategory(categoryId: String, name: String) {
+        database.categoryQueries.rename(name, categoryId)
+        changes.notifyChanged()
+    }
+
+    /** True if the category has transactions or Assigned amounts that must go somewhere on delete. */
+    fun categoryHasHistory(categoryId: String): Boolean =
+        database.txnQueries.countByCategory(categoryId).executeAsOne() > 0 ||
+            database.assignedQueries.selectByCategory(categoryId).executeAsList().isNotEmpty()
+
+    /**
+     * Delete a category in one DB transaction. Its transactions and Assigned amounts move to
+     * [moveToCategoryId], so balances, Ready to Assign and total Available do not change.
+     * [moveToCategoryId] may be null only when the category has no history.
+     * @return true if deleted.
+     */
+    fun deleteCategory(categoryId: String, moveToCategoryId: String?): Boolean {
+        if (categoryId == moveToCategoryId) return false
+        val deleted = database.transactionWithResult {
+            if (moveToCategoryId == null) {
+                if (categoryHasHistory(categoryId)) return@transactionWithResult false
+            } else {
+                database.txnQueries.moveCategory(moveToCategoryId, categoryId)
+                val merged = CategoryRules.mergeAssigned(
+                    from = assignedByMonth(categoryId),
+                    into = assignedByMonth(moveToCategoryId),
+                )
+                merged.forEach { (month, amount) -> database.assignedQueries.upsert(moveToCategoryId, month, amount) }
+            }
+            database.assignedQueries.deleteByCategory(categoryId)
+            database.categoryQueries.delete(categoryId)
+            true
+        }
+        if (deleted) changes.notifyChanged()
+        return deleted
+    }
+
     /** Total inflow to on-budget accounts across all months. */
     fun getTotalInflow(): Long =
         BudgetMath.totalInflow(accountRepository.getTransactions(), onBudgetAccountIds())
 
     // ---- private ----
+
+    private fun assignedByMonth(categoryId: String): Map<Long, Long> =
+        database.assignedQueries.selectByCategory(categoryId) { month, amount -> month to amount }
+            .executeAsList().toMap()
+
+    /** Random id like "cat_3f9a1c2b", retried until [isTaken] says it is free. */
+    private fun newId(prefix: String, isTaken: (String) -> Boolean): String {
+        while (true) {
+            val id = prefix + Random.nextInt().toUInt().toString(16)
+            if (!isTaken(id)) return id
+        }
+    }
 
     private fun onBudgetAccountIds(): Set<Long> =
         accountRepository.getAccounts().filter { it.onBudget }.map { it.id }.toSet()
@@ -91,5 +178,10 @@ class BudgetRepository(
             categories.insert("cat_savings", "grp_lifestyle", "Savings", 0)
             categories.insert("cat_fun", "grp_lifestyle", "Fun", 1)
         }
+    }
+
+    private companion object {
+        const val GROUP_PREFIX = "grp_"
+        const val CATEGORY_PREFIX = "cat_"
     }
 }

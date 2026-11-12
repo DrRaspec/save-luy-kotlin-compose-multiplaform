@@ -14,3 +14,9 @@ SELECT amount FROM assigned WHERE categoryId = ? AND month = ?;
 
 upsert:
 INSERT OR REPLACE INTO assigned(categoryId, month, amount) VALUES (?, ?, ?);
+
+selectByCategory:
+SELECT month, amount FROM assigned WHERE categoryId = ?;
+
+deleteByCategory:
+DELETE FROM assigned WHERE categoryId = ?;

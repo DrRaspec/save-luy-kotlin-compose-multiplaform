@@ -69,6 +69,10 @@ object BudgetMath {
         }
     }
 
+    /** Cash in on-budget accounts: every transaction on them, categorized or not. */
+    fun onBudgetBalance(transactions: List<Transaction>, onBudgetAccountIds: Set<Long>): Long =
+        transactions.filter { it.accountId in onBudgetAccountIds }.sumOf { it.amount }
+
     /** Balance of every account that has transactions, keyed by account id. */
     fun accountBalances(transactions: List<Transaction>): Map<Long, Long> =
         transactions.groupBy { it.accountId }.mapValues { (_, txns) -> txns.sumOf { it.amount } }

@@ -14,3 +14,15 @@ ORDER BY categoryGroup.sortOrder, category.sortOrder;
 
 insert:
 INSERT INTO category(id, groupId, name, sortOrder) VALUES (?, ?, ?, ?);
+
+nextSortOrder:
+SELECT COALESCE(MAX(sortOrder) + 1, 0) FROM category WHERE groupId = ?;
+
+rename:
+UPDATE category SET name = ? WHERE id = ?;
+
+delete:
+DELETE FROM category WHERE id = ?;
+
+countByGroup:
+SELECT COUNT(*) FROM category WHERE groupId = ?;

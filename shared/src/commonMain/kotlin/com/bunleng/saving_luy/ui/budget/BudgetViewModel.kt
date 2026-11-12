@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import com.bunleng.saving_luy.data.BudgetRepository
 import com.bunleng.saving_luy.data.DataChangeNotifier
 import com.bunleng.saving_luy.domain.BudgetCategory
+import com.bunleng.saving_luy.domain.BudgetHint
 import com.bunleng.saving_luy.domain.BudgetMath
 import com.bunleng.saving_luy.domain.BudgetMonth
 import com.bunleng.saving_luy.domain.CategoryBudgetEntry
 import com.bunleng.saving_luy.domain.CategoryGroup
+import com.bunleng.saving_luy.domain.CategoryRules
 import com.bunleng.saving_luy.domain.MoveMoneyError
 import com.bunleng.saving_luy.domain.MoveMoneyRules
+import com.bunleng.saving_luy.domain.NameError
 import com.bunleng.saving_luy.domain.currentBudgetMonth
 import com.bunleng.saving_luy.ui.MoneyFormatter
 import com.bunleng.saving_luy.ui.components.AmountInput
@@ -25,11 +28,21 @@ data class BudgetUiState(
     val currentMonth: BudgetMonth,
     val readyToAssign: Long = 0L,
     val totalInflow: Long = 0L,
+    /** Cash in on-budget accounts, shown under the banner. */
+    val onBudgetBalance: Long = 0L,
+    /** Nudge under the banner, or null when there is nothing to fix. */
+    val hint: BudgetHint? = null,
     val groupRows: List<GroupUiState> = emptyList(),
     /** Which category is being edited in the bottom sheet, or null if hidden. */
     val editingCategory: EditAssignedState? = null,
     /** The Move Money sheet, or null if hidden. */
     val moveMoney: MoveMoneyState? = null,
+    /** Add or rename dialog for a category or group, or null if hidden. */
+    val nameDialog: NameDialogState? = null,
+    /** Delete-category confirmation, or null if hidden. */
+    val deleteCategory: DeleteCategoryState? = null,
+    /** Delete-group confirmation, or null if hidden. */
+    val deleteGroup: DeleteGroupState? = null,
 ) {
     /** Every category with its current-month entry, in Budget screen order. */
     val allCategoryRows: List<CategoryRowUiState> get() = groupRows.flatMap { it.categoryRows }
@@ -64,6 +77,38 @@ data class MoveMoneyState(
 ) {
     val amountCents: Long get() = MoneyFormatter.parseCents(amountText) ?: 0L
 }
+
+/** What the name dialog creates or renames. */
+sealed interface NameTarget {
+    data object NewGroup : NameTarget
+    data class RenameGroup(val groupId: String) : NameTarget
+    data class NewCategory(val groupId: String) : NameTarget
+    data class RenameCategory(val categoryId: String) : NameTarget
+}
+
+data class NameDialogState(
+    val target: NameTarget,
+    val name: String,
+    val error: NameError? = null,
+) {
+    val isCategory: Boolean get() = target is NameTarget.NewCategory || target is NameTarget.RenameCategory
+    val isNew: Boolean get() = target is NameTarget.NewGroup || target is NameTarget.NewCategory
+}
+
+data class DeleteCategoryState(
+    val category: BudgetCategory,
+    /** True when transactions or Assigned amounts must move to another category. */
+    val hasHistory: Boolean,
+    val moveToCategoryId: String? = null,
+) {
+    val canDelete: Boolean get() = !hasHistory || moveToCategoryId != null
+}
+
+data class DeleteGroupState(
+    val group: CategoryGroup,
+    /** Only empty groups can be deleted. */
+    val isEmpty: Boolean,
+)
 
 class BudgetViewModel(
     private val repository: BudgetRepository,
@@ -229,6 +274,107 @@ class BudgetViewModel(
         _uiState.update { it.copy(moveMoney = null) }
     }
 
+    // ---- category and group management ----
+
+    fun startAddGroup() = openNameDialog(NameTarget.NewGroup, "")
+
+    fun startRenameGroup(groupId: String) {
+        val group = _uiState.value.groupRows.firstOrNull { it.group.id == groupId }?.group ?: return
+        openNameDialog(NameTarget.RenameGroup(groupId), group.name)
+    }
+
+    fun startAddCategory(groupId: String) = openNameDialog(NameTarget.NewCategory(groupId), "")
+
+    fun startRenameCategory(categoryId: String) {
+        val category = categoryById(categoryId) ?: return
+        openNameDialog(NameTarget.RenameCategory(categoryId), category.name)
+    }
+
+    fun onNameChange(name: String) {
+        _uiState.update { state -> state.copy(nameDialog = state.nameDialog?.copy(name = name, error = null)) }
+    }
+
+    /** Validate and save. Closes the dialog on success, otherwise shows the error. */
+    fun confirmNameDialog(): Boolean {
+        val dialog = _uiState.value.nameDialog ?: return false
+        val error = CategoryRules.validateName(dialog.name, otherNames(dialog.target))
+        if (error != null) {
+            _uiState.update { it.copy(nameDialog = dialog.copy(error = error)) }
+            return false
+        }
+        _uiState.update { it.copy(nameDialog = null) }
+        val name = dialog.name.trim()
+        when (val target = dialog.target) {
+            NameTarget.NewGroup -> repository.addGroup(name)
+            is NameTarget.RenameGroup -> repository.renameGroup(target.groupId, name)
+            is NameTarget.NewCategory -> repository.addCategory(target.groupId, name)
+            is NameTarget.RenameCategory -> repository.renameCategory(target.categoryId, name)
+        }
+        return true
+    }
+
+    fun dismissNameDialog() {
+        _uiState.update { it.copy(nameDialog = null) }
+    }
+
+    fun requestDeleteCategory(categoryId: String) {
+        val category = categoryById(categoryId) ?: return
+        _uiState.update {
+            it.copy(deleteCategory = DeleteCategoryState(category, repository.categoryHasHistory(categoryId)))
+        }
+    }
+
+    fun selectDeleteMoveTo(categoryId: String) {
+        _uiState.update { state ->
+            state.copy(deleteCategory = state.deleteCategory?.copy(moveToCategoryId = categoryId))
+        }
+    }
+
+    fun confirmDeleteCategory(): Boolean {
+        val delete = _uiState.value.deleteCategory ?: return false
+        if (!delete.canDelete) return false
+        _uiState.update { it.copy(deleteCategory = null) }
+        return repository.deleteCategory(delete.category.id, delete.moveToCategoryId)
+    }
+
+    fun cancelDeleteCategory() {
+        _uiState.update { it.copy(deleteCategory = null) }
+    }
+
+    fun requestDeleteGroup(groupId: String) {
+        val row = _uiState.value.groupRows.firstOrNull { it.group.id == groupId } ?: return
+        _uiState.update { it.copy(deleteGroup = DeleteGroupState(row.group, row.categoryRows.isEmpty())) }
+    }
+
+    fun confirmDeleteGroup(): Boolean {
+        val delete = _uiState.value.deleteGroup ?: return false
+        _uiState.update { it.copy(deleteGroup = null) }
+        return delete.isEmpty && repository.deleteGroup(delete.group.id)
+    }
+
+    fun cancelDeleteGroup() {
+        _uiState.update { it.copy(deleteGroup = null) }
+    }
+
+    private fun openNameDialog(target: NameTarget, name: String) {
+        _uiState.update { it.copy(nameDialog = NameDialogState(target, name)) }
+    }
+
+    private fun categoryById(categoryId: String): BudgetCategory? =
+        _uiState.value.allCategoryRows.firstOrNull { it.category.id == categoryId }?.category
+
+    /** Names the new or renamed item must not clash with. Category names are unique across groups. */
+    private fun otherNames(target: NameTarget): List<String> {
+        val state = _uiState.value
+        return when (target) {
+            NameTarget.NewGroup -> state.groupRows.map { it.group.name }
+            is NameTarget.RenameGroup -> state.groupRows.filter { it.group.id != target.groupId }.map { it.group.name }
+            is NameTarget.NewCategory -> state.allCategoryRows.map { it.category.name }
+            is NameTarget.RenameCategory ->
+                state.allCategoryRows.filter { it.category.id != target.categoryId }.map { it.category.name }
+        }
+    }
+
     /** Apply a change to the open Move Money sheet and clear any previous error. */
     private fun updateMove(change: (MoveMoneyState) -> MoveMoneyState) {
         _uiState.update { state -> state.copy(moveMoney = state.moveMoney?.let { change(it).copy(error = null) }) }
@@ -259,10 +405,16 @@ class BudgetViewModel(
             )
         }
 
+        val overspentNames = groupRows.flatMap { it.categoryRows }
+            .filter { it.entry.available < 0 }
+            .map { it.category.name }
+
         _uiState.update {
             it.copy(
                 readyToAssign = readyToAssign,
                 totalInflow = totalInflow,
+                onBudgetBalance = repository.getOnBudgetBalance(),
+                hint = BudgetHint.of(readyToAssign, overspentNames),
                 groupRows = groupRows,
             )
         }
